@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "last_hint_id": 23,
+  "known_hint_ids": [
+    "HINT-001",
+    "HINT-002",
+    "HINT-003",
+    "HINT-004",
+    "HINT-005",
+    "HINT-006",
+    "HINT-007",
+    "HINT-008",
+    "HINT-009",
+    "HINT-010",
+    "HINT-011",
+    "HINT-012",
+    "HINT-013",
+    "HINT-014",
+    "HINT-015",
+    "HINT-016",
+    "HINT-017",
+    "HINT-018",
+    "HINT-019",
+    "HINT-020",
+    "HINT-021",
+    "HINT-022",
+    "HINT-023"
+  ],
+  "processed_sources": [],
+  "notes": "IDs 001–023 are historical references; full original reports have not yet been imported. This file does not assert that archived Hint files exist."
+}
