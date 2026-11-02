@@ -10,6 +10,6 @@ A versioned, evidence-first archive for daily AI Agent engineering and productiv
 - `templates/`: reporting formats.
 - `scripts/`: local import and validation utilities.
 
-**Publishing rule:** No qualifying evidence = no daily report, no new Hint. Keep sources, dates, confidence and limitations explicit. Never commit secrets, customer data, device credentials, private IPs or proprietary records. Repository visibility should be Private before storing internal information.
+**Publishing rule:** No qualifying evidence = no daily report, no new Hint. Keep sources, dates, confidence and limitations explicit. Never commit secrets, customer data, device credentials, private IPs or proprietary records. This repository is intentionally public. Publish only non-sensitive content; keep credentials, customer data and private infrastructure details out of Git.
 
 **Automation status:** Repository scaffolding does not itself connect ChatGPT scheduled tasks to GitHub writes. A separate supported ingest mechanism must be configured and verified.
