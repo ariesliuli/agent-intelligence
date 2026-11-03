@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_hint_id": 23,
+  "last_hint_id": 24,
   "known_hint_ids": [
     "HINT-001",
     "HINT-002",
@@ -24,8 +24,22 @@
     "HINT-020",
     "HINT-021",
     "HINT-022",
-    "HINT-023"
+    "HINT-023",
+    "HINT-024"
   ],
-  "processed_sources": [],
+  "processed_sources": [
+    {
+      "url": "https://developers.openai.com/api/docs/guides/decisions",
+      "hint_id": "HINT-024",
+      "date": "2026-10-22",
+      "evidence": "official API docs"
+    },
+    {
+      "url": "https://openai.com/index/qodo-codex-plugin/",
+      "hint_id": "HINT-024",
+      "date": "2026-11-02",
+      "evidence": "company case study; Decisions API rule selection proposed, not measured"
+    }
+  ],
   "notes": "IDs 001–023 are historical references; full original reports have not yet been imported. This file does not assert that archived Hint files exist."
 }
