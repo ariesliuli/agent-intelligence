@@ -35,11 +35,13 @@ def test_known_no_effect_retry(env):
     s,_=env; enqueue(s); a=s.claim('op1','codex'); assert s.fail('op1','codex',a,'validation',True); assert s.claim('op1','claude')==2
 def test_reconcile_success(env):
     s,_=env; enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
-    assert s.reconcile('op1','succeeded','verified remote receipt')
+    with pytest.raises(PermissionError, match='reconciliation_verifier_required'):
+        s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded','receipt':'untrusted'})
 def test_reconcile_retry(env):
     s,_=env; enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
-    assert s.reconcile('op1','pending','remote confirms no effect')
-    assert s.claim('op1','claude')==2
+    with pytest.raises(PermissionError, match='reconciliation_verifier_required'):
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','receipt':'untrusted'})
+    assert s.claim('op1','claude') is None
 def test_no_reconcile_without_evidence(env):
     s,_=env; enqueue(s)
     with pytest.raises(ValueError): s.reconcile('op1','pending','')
@@ -47,4 +49,21 @@ def test_bad_lease(env):
     s,_=env; enqueue(s)
     with pytest.raises(ValueError): s.claim('op1','',0)
 def test_cannot_reconcile_pending(env):
-    s,_=env; enqueue(s); assert not s.reconcile('op1','succeeded','receipt')
+    s,_=env; enqueue(s); with pytest.raises(PermissionError):
+        s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded'})
+
+def test_verified_reconciliation_can_retry(env):
+    s,t=env
+    s.reconciliation_verifier=lambda op,out,e: (op=='op1' and out=='pending' and e.get('receipt')=='simulated_no_effect')
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','receipt':'simulated_no_effect'})
+    assert s.claim('op1','claude')==2
+
+def test_wrong_binding_and_rejected_verifier(env):
+    s,_=env; s.reconciliation_verifier=lambda *args: False
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    with pytest.raises(PermissionError,match='binding'):
+        s.reconcile('op1','pending',{'op_id':'op2','outcome':'pending'})
+    with pytest.raises(PermissionError,match='unverified'):
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+    assert s.get('op1')['state']=='ambiguous'
