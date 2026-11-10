@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_hint_id": 24,
+  "last_hint_id": 25,
   "known_hint_ids": [
     "HINT-001",
     "HINT-002",
@@ -25,7 +25,8 @@
     "HINT-021",
     "HINT-022",
     "HINT-023",
-    "HINT-024"
+    "HINT-024",
+    "HINT-025"
   ],
   "processed_sources": [
     {
@@ -39,6 +40,12 @@
       "hint_id": "HINT-024",
       "date": "2026-11-02",
       "evidence": "company case study; Decisions API rule selection proposed, not measured"
+    },
+    {
+      "url": "https://github.blog/changelog/2026-11-03-dependabot-version-updates-support-agent-package-manager/",
+      "hint_id": "HINT-025",
+      "date": "2026-11-03",
+      "evidence": "official GA feature; repository implementation unverified"
     }
   ],
   "notes": "IDs 001–023 are historical references; full original reports have not yet been imported. This file does not assert that archived Hint files exist."
