@@ -24,3 +24,14 @@ A versioned, evidence-first archive for daily AI Agent engineering and productiv
 - [Agent 宿主行为约束](AGENTS.md)
 
 当前状态：**规范已纳入仓库，尚未实现自动分级与长期预测评测器**。
+
+## 宿主思维体系（Host Cognitive Architecture）
+
+**最终目标：极限优化 AI 因果直觉。** 用庞大且可验证的经验积累，持续进行因果抽象、压缩、迁移验证和淘汰，让 Agent 在低 Token 成本下快速判断，并在经验不适用时自动升级到第一性原理分析。
+
+**所有读取本库的 AI 请从 [AGENTS.md](AGENTS.md) 开始，依次阅读：**
+
+1. [宿主因果直觉进化协议（Host Causal Intuition Evolution）](architecture/HOST-CAUSAL-INTUITION.md)
+2. [宿主级第一性原理与未来止损评估（Host First-Principles）](architecture/HOST-FIRST-PRINCIPLES.md)
+
+**状态**：这是跨 Agent 的共享规范与实施路线，尚非已部署的直觉学习引擎。经验检索不会自动改变模型权重；必须由执行器实际加载并验证。
