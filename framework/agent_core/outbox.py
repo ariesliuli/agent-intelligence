@@ -3,9 +3,10 @@ import json, sqlite3, time
 from contextlib import contextmanager
 
 class Outbox:
-    def __init__(self, path, clock=None):
+    def __init__(self, path, clock=None, reconciliation_verifier=None):
         self.path=str(path)
         self.clock=clock or time.time
+        self.reconciliation_verifier=reconciliation_verifier
         with sqlite3.connect(self.path) as db:
             db.execute("""CREATE TABLE IF NOT EXISTS operations(
               op_id TEXT PRIMARY KEY,task_id TEXT,action TEXT,payload TEXT,
@@ -59,7 +60,17 @@ class Outbox:
         with self._tx() as db:
             return db.execute("UPDATE operations SET state='ambiguous',owner=NULL,lease_until=NULL,last_error='lease_expired',updated_at=? WHERE op_id=? AND state='inflight' AND lease_until<=?",(now,op_id,now)).rowcount==1
     def reconcile(self,op_id,outcome,evidence):
-        if outcome not in ('succeeded','pending','failed') or not evidence: raise ValueError('invalid_reconciliation')
+        # Fail closed: a plain text receipt is NOT authority to retry an ambiguous operation.
+        if outcome not in ('succeeded','pending','failed') or not isinstance(evidence,dict):
+            raise ValueError('invalid_reconciliation')
+        if self.reconciliation_verifier is None:
+            raise PermissionError('reconciliation_verifier_required')
+        if evidence.get('op_id') != op_id or evidence.get('outcome') != outcome:
+            raise PermissionError('reconciliation_binding_mismatch')
+        # Verifier must authenticate issuer, bind to op_id/outcome, check expiry and
+        # replay, and independently establish remote effect/non-effect.
+        if self.reconciliation_verifier(op_id,outcome,evidence) is not True:
+            raise PermissionError('unverified_reconciliation')
         now=self.clock()
         with self._tx() as db:
             return db.execute("UPDATE operations SET state=?,result=?,updated_at=? WHERE op_id=? AND state='ambiguous'",(outcome,json.dumps({'evidence':evidence}),now,op_id)).rowcount==1
