@@ -49,7 +49,9 @@ def test_bad_lease(env):
     s,_=env; enqueue(s)
     with pytest.raises(ValueError): s.claim('op1','',0)
 def test_cannot_reconcile_pending(env):
-    s,_=env; enqueue(s); with pytest.raises(PermissionError):
+    s,_=env
+    enqueue(s)
+    with pytest.raises(PermissionError, match='reconciliation_verifier_required'):
         s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded'})
 
 def test_verified_reconciliation_can_retry(env):
@@ -67,3 +69,30 @@ def test_wrong_binding_and_rejected_verifier(env):
     with pytest.raises(PermissionError,match='unverified'):
         s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
     assert s.get('op1')['state']=='ambiguous'
+
+def test_verifier_truthy_non_bool_rejected(env):
+    s,_=env
+    s.reconciliation_verifier=lambda *args: 1
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    with pytest.raises(PermissionError,match='unverified'):
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+    assert s.get('op1')['state']=='ambiguous'
+
+def test_reconcile_only_ambiguous_state(env):
+    s,_=env
+    calls=[]
+    s.reconciliation_verifier=lambda *args: calls.append(args) or True
+    enqueue(s)
+    assert s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded'}) is False
+    assert s.get('op1')['state']=='pending'
+    assert len(calls)==1
+
+def test_expired_lease_not_finished_after_reconciliation(env):
+    s,t=env
+    s.reconciliation_verifier=lambda *args: True
+    enqueue(s); attempt=s.claim('op1','codex',ttl=5)
+    t[0]+=6
+    assert s.expire('op1')
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+    assert not s.finish('op1','codex',attempt,{'ok':True})
+    assert s.claim('op1','claude')==2
