@@ -31,8 +31,36 @@ def test_expired_to_ambiguous(env):
     assert not s.finish('op1','codex',a,{})
 def test_unknown_error_ambiguous(env):
     s,_=env; enqueue(s); a=s.claim('op1','codex'); assert s.fail('op1','codex',a,'timeout'); assert s.get('op1')['state']=='ambiguous'
-def test_known_no_effect_retry(env):
-    s,_=env; enqueue(s); a=s.claim('op1','codex'); assert s.fail('op1','codex',a,'validation',True); assert s.claim('op1','claude')==2
+def test_caller_no_effect_claim_cannot_retry(env):
+    s,_=env
+    enqueue(s)
+    a=s.claim('op1','codex')
+    with pytest.raises(PermissionError, match='unverified_no_effect_claim'):
+        s.fail('op1','codex',a,'timeout',True)
+    assert s.get('op1')['state']=='inflight'
+    assert s.fail('op1','codex',a,'timeout')
+    assert s.get('op1')['state']=='ambiguous'
+    assert s.claim('op1','claude') is None
+
+@pytest.mark.parametrize('claim', [1, 'true', None, {'trusted': True}])
+def test_non_boolean_no_effect_claim_rejected(env, claim):
+    s,_=env
+    enqueue(s)
+    a=s.claim('op1','codex')
+    with pytest.raises(PermissionError, match='unverified_no_effect_claim'):
+        s.fail('op1','codex',a,'timeout',claim)
+    assert s.get('op1')['state']=='inflight'
+
+def test_failed_lease_cannot_override_ambiguous(env):
+    s,t=env
+    enqueue(s)
+    a=s.claim('op1','codex',ttl=5)
+    t[0]+=6
+    assert s.expire('op1')
+    with pytest.raises(PermissionError, match='unverified_no_effect_claim'):
+        s.fail('op1','codex',a,'timeout',True)
+    assert s.get('op1')['state']=='ambiguous'
+    assert s.claim('op1','claude') is None
 def test_reconcile_success(env):
     s,_=env; enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
     with pytest.raises(PermissionError, match='reconciliation_verifier_required'):
