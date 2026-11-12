@@ -51,8 +51,13 @@ class Outbox:
         with self._tx() as db:
             return db.execute("UPDATE operations SET state='succeeded',result=?,owner=NULL,lease_until=NULL,updated_at=? WHERE op_id=? AND state='inflight' AND owner=? AND attempt=? AND lease_until>?",(json.dumps(result),now,op_id,owner,attempt,now)).rowcount==1
     def fail(self,op_id,owner,attempt,error,known_no_effect=False):
+        # A caller-supplied boolean is not proof that a remote side effect did not occur.
+        # Preserve the argument for compatibility but fail closed; use independent
+        # reconciliation for any ambiguous operation before permitting a retry.
+        if known_no_effect is not False:
+            raise PermissionError('unverified_no_effect_claim')
         now=self.clock()
-        state='pending' if known_no_effect else 'ambiguous'
+        state='ambiguous'
         with self._tx() as db:
             return db.execute("UPDATE operations SET state=?,last_error=?,owner=NULL,lease_until=NULL,updated_at=? WHERE op_id=? AND state='inflight' AND owner=? AND attempt=? AND lease_until>?",(state,str(error),now,op_id,owner,attempt,now)).rowcount==1
     def expire(self,op_id):
