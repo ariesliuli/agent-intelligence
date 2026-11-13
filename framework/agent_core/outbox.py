@@ -13,6 +13,9 @@ class Outbox:
               idempotency_key TEXT UNIQUE,state TEXT,attempt INTEGER DEFAULT 0,
               owner TEXT,lease_until REAL,result TEXT,last_error TEXT,
               created_at REAL,updated_at REAL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS reconciliation_nonces(
+              nonce TEXT PRIMARY KEY,op_id TEXT NOT NULL,outcome TEXT NOT NULL,
+              consumed_at REAL NOT NULL)""")
     @contextmanager
     def _tx(self):
         db=sqlite3.connect(self.path,timeout=10,isolation_level=None)
@@ -65,20 +68,36 @@ class Outbox:
         with self._tx() as db:
             return db.execute("UPDATE operations SET state='ambiguous',owner=NULL,lease_until=NULL,last_error='lease_expired',updated_at=? WHERE op_id=? AND state='inflight' AND lease_until<=?",(now,op_id,now)).rowcount==1
     def reconcile(self,op_id,outcome,evidence):
-        # Fail closed: a plain text receipt is NOT authority to retry an ambiguous operation.
+        # The verifier is an injected trusted adapter, not a model-generated assertion.
         if outcome not in ('succeeded','pending','failed') or not isinstance(evidence,dict):
             raise ValueError('invalid_reconciliation')
         if self.reconciliation_verifier is None:
             raise PermissionError('reconciliation_verifier_required')
         if evidence.get('op_id') != op_id or evidence.get('outcome') != outcome:
             raise PermissionError('reconciliation_binding_mismatch')
-        # Verifier must authenticate issuer, bind to op_id/outcome, check expiry and
-        # replay, and independently establish remote effect/non-effect.
-        if self.reconciliation_verifier(op_id,outcome,evidence) is not True:
-            raise PermissionError('unverified_reconciliation')
+        nonce=evidence.get('nonce')
+        if not isinstance(nonce,str) or not nonce.strip() or len(nonce)>256:
+            raise PermissionError('reconciliation_nonce_required')
         now=self.clock()
+        # Serialize verification, nonce consumption, and state transition in ONE
+        # SQLite write transaction. Concurrent requests cannot both consume a nonce.
         with self._tx() as db:
-            return db.execute("UPDATE operations SET state=?,result=?,updated_at=? WHERE op_id=? AND state='ambiguous'",(outcome,json.dumps({'evidence':evidence}),now,op_id)).rowcount==1
+            row=db.execute("SELECT state FROM operations WHERE op_id=?",(op_id,)).fetchone()
+            if not row or row[0]!='ambiguous':
+                return False
+            if db.execute("SELECT 1 FROM reconciliation_nonces WHERE nonce=?",(nonce,)).fetchone():
+                raise PermissionError('replayed_reconciliation')
+            # This hook must independently authenticate the remote result and its
+            # op/outcome/nonce binding. Never wire a permissive lambda in production.
+            if self.reconciliation_verifier(op_id,outcome,evidence) is not True:
+                raise PermissionError('unverified_reconciliation')
+            db.execute("INSERT INTO reconciliation_nonces(nonce,op_id,outcome,consumed_at) VALUES(?,?,?,?)",
+                       (nonce,op_id,outcome,now))
+            changed=db.execute("UPDATE operations SET state=?,result=?,updated_at=? WHERE op_id=? AND state='ambiguous'",
+                               (outcome,json.dumps({'evidence':evidence}),now,op_id)).rowcount
+            if changed!=1:
+                raise RuntimeError('reconciliation_state_race')
+            return True
     def get(self,op_id):
         with sqlite3.connect(self.path) as db:
             db.row_factory=sqlite3.Row
