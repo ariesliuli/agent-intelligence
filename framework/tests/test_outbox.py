@@ -95,7 +95,7 @@ def test_wrong_binding_and_rejected_verifier(env):
     with pytest.raises(PermissionError,match='binding'):
         s.reconcile('op1','pending',{'op_id':'op2','outcome':'pending'})
     with pytest.raises(PermissionError,match='unverified'):
-        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','nonce':'n-truthy-1'})
     assert s.get('op1')['state']=='ambiguous'
 
 def test_verifier_truthy_non_bool_rejected(env):
@@ -111,7 +111,7 @@ def test_reconcile_only_ambiguous_state(env):
     calls=[]
     s.reconciliation_verifier=lambda *args: calls.append(args) or True
     enqueue(s)
-    assert s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded'}) is False
+    assert s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded','nonce':'n-not-ambiguous'}) is False
     assert s.get('op1')['state']=='pending'
     assert len(calls)==0
 
