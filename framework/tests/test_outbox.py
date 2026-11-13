@@ -86,7 +86,7 @@ def test_verified_reconciliation_can_retry(env):
     s,t=env
     s.reconciliation_verifier=lambda op,out,e: (op=='op1' and out=='pending' and e.get('receipt')=='simulated_no_effect')
     enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
-    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','receipt':'simulated_no_effect'})
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','receipt':'simulated_no_effect','nonce':'n-retry-1'})
     assert s.claim('op1','claude')==2
 
 def test_wrong_binding_and_rejected_verifier(env):
@@ -113,7 +113,7 @@ def test_reconcile_only_ambiguous_state(env):
     enqueue(s)
     assert s.reconcile('op1','succeeded',{'op_id':'op1','outcome':'succeeded'}) is False
     assert s.get('op1')['state']=='pending'
-    assert len(calls)==1
+    assert len(calls)==0
 
 def test_expired_lease_not_finished_after_reconciliation(env):
     s,t=env
@@ -121,6 +121,46 @@ def test_expired_lease_not_finished_after_reconciliation(env):
     enqueue(s); attempt=s.claim('op1','codex',ttl=5)
     t[0]+=6
     assert s.expire('op1')
-    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','nonce':'n-expired-1'})
     assert not s.finish('op1','codex',attempt,{'ok':True})
     assert s.claim('op1','claude')==2
+
+def test_reconcile_requires_nonce(env):
+    s,_=env
+    s.reconciliation_verifier=lambda *args: True
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    with pytest.raises(PermissionError,match='nonce_required'):
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+    assert s.get('op1')['state']=='ambiguous'
+
+def test_nonce_replay_rejected_across_operations(env):
+    s,_=env
+    s.reconciliation_verifier=lambda *args: True
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','nonce':'unique-1'})
+    assert s.enqueue('op2','task2','read_status',{},'task2:read_status:v1')
+    a2=s.claim('op2','claude'); s.fail('op2','claude',a2,'timeout')
+    with pytest.raises(PermissionError,match='replayed_reconciliation'):
+        s.reconcile('op2','pending',{'op_id':'op2','outcome':'pending','nonce':'unique-1'})
+    assert s.get('op2')['state']=='ambiguous'
+
+def test_verifier_rejection_does_not_consume_nonce(env):
+    s,_=env
+    s.reconciliation_verifier=lambda *args: False
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    evidence={'op_id':'op1','outcome':'pending','nonce':'n-reject-1'}
+    with pytest.raises(PermissionError,match='unverified'):
+        s.reconcile('op1','pending',evidence)
+    s.reconciliation_verifier=lambda *args: True
+    assert s.reconcile('op1','pending',evidence)
+
+def test_nonce_persists_across_restart(env):
+    s,_=env
+    s.reconciliation_verifier=lambda *args: True
+    enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
+    assert s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','nonce':'n-persist-1'})
+    restarted=Outbox(s.path,clock=s.clock,reconciliation_verifier=lambda *args: True)
+    restarted.enqueue('op2','task2','read_status',{},'task2:read_status:v1')
+    a2=restarted.claim('op2','claude'); restarted.fail('op2','claude',a2,'timeout')
+    with pytest.raises(PermissionError,match='replayed'):
+        restarted.reconcile('op2','pending',{'op_id':'op2','outcome':'pending','nonce':'n-persist-1'})
