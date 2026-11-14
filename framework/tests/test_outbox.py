@@ -103,7 +103,7 @@ def test_verifier_truthy_non_bool_rejected(env):
     s.reconciliation_verifier=lambda *args: 1
     enqueue(s); a=s.claim('op1','codex'); s.fail('op1','codex',a,'timeout')
     with pytest.raises(PermissionError,match='unverified'):
-        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending'})
+        s.reconcile('op1','pending',{'op_id':'op1','outcome':'pending','nonce':'n-truthy-reject-1'})
     assert s.get('op1')['state']=='ambiguous'
 
 def test_reconcile_only_ambiguous_state(env):
