@@ -40,7 +40,7 @@ def test_old_two_call_path_exposes_orphan_task(parts):
     with pytest.raises(ValueError,match="intent_conflict"):
         atomic.submit_with_operation("t",{"goal":"sim"},"op","read_status",{},"t:read:v1")
 
-def test_reconcile_requires_evidence_but_not_authentication_yet(parts):
+def test_reconcile_rejects_unverified_evidence_and_preserves_ambiguous_state(parts):
     _,_,outbox,atomic=parts
     atomic.submit_with_operation("t",{},"op","device_write",{},"t:write:v1")
     assert outbox.claim("op","worker-a",ttl=1)==1
@@ -48,5 +48,10 @@ def test_reconcile_requires_evidence_but_not_authentication_yet(parts):
     with pytest.raises(ValueError,match="invalid_reconciliation"):
         outbox.reconcile("op","pending","")
     assert outbox.get("op")["state"]=="ambiguous"
-    # Demonstrates security gap: arbitrary nonempty evidence currently accepted.
-    assert outbox.reconcile("op","pending","unverified-string")
+    # An unverified string is not an authenticated remote result.
+    with pytest.raises(ValueError, match="invalid_reconciliation"):
+        outbox.reconcile("op", "pending", "unverified-string")
+    # Even a correctly-shaped dict must not pass without an independent verifier.
+    with pytest.raises(PermissionError, match="reconciliation_verifier_required"):
+        outbox.reconcile("op", "pending", {"op_id": "op", "outcome": "pending", "nonce": "n1"})
+    assert outbox.get("op")["state"] == "ambiguous"
