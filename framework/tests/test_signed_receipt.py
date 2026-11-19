@@ -22,12 +22,16 @@ def test_valid_synthetic_signature():
     assert verify(envelope()).receipt_id == "r-1"
 
 @pytest.mark.parametrize("change", [
-    {"receipt_id":"r-2"}, {"op_id":"op-2"}, {"outcome":"succeeded"},
+    {"op_id":"op-2"}, {"outcome":"succeeded"},
     {"expires_at":99}, {"issued_at":107}, {"payload_digest":"sha256:other"}
 ])
 def test_signed_but_wrong_binding_rejected(change):
     with pytest.raises(PermissionError):
         verify(envelope(change))
+
+def test_new_receipt_id_with_valid_signature_is_distinct_valid_receipt():
+    # Authentication binds the receipt ID into the signature; it does not pin it to r-1.
+    assert verify(envelope({"receipt_id": "r-2"})).receipt_id == "r-2"
 
 def test_unsigned_mutation_rejected():
     e=envelope(); e["body"]["receipt_id"]="r-2"
