@@ -51,3 +51,19 @@ def test_payload_context_rejected():
     with pytest.raises(PermissionError, match="payload_binding_mismatch"):
         verify_signed_receipt(envelope(), keys={"simulator": KEY}, op_id="op-1",
             outcome="pending", payload_digest="sha256:different", now=100)
+
+@pytest.mark.parametrize("bad_digest", [None, 17, False, [], {"x": 1}])
+def test_signed_malformed_digest_fails_closed(bad_digest):
+    # A valid MAC over malformed data must not escape as TypeError.
+    with pytest.raises(PermissionError, match="invalid_payload_digest"):
+        verify(envelope({"payload_digest": bad_digest}))
+
+def test_invalid_keyring_fails_closed():
+    with pytest.raises(PermissionError, match="invalid_keyring"):
+        verify_signed_receipt(envelope(), keys=None, op_id="op-1",
+            outcome="pending", payload_digest="sha256:synthetic", now=100)
+
+@pytest.mark.parametrize("bad_identity", [None, 0, [], {"x": 1}])
+def test_signed_malformed_operation_identity_fails_closed(bad_identity):
+    with pytest.raises(PermissionError):
+        verify(envelope({"op_id": bad_identity}))
