@@ -2,7 +2,6 @@
 import hashlib
 import hmac
 import json
-import math
 from typing import Mapping
 from agent_core.receipt_gate import VerifiedReceipt, validate_receipt
 
@@ -19,6 +18,8 @@ def verify_signed_receipt(envelope: Mapping, *, keys: Mapping[str, bytes], op_id
     if not isinstance(body, dict) or set(body) != set(_FIELDS) or envelope["alg"] != "HS256":
         raise PermissionError("unsupported_receipt_format")
     issuer = body.get("issuer")
+    if not isinstance(keys, Mapping):
+        raise PermissionError("invalid_keyring")
     key = keys.get(issuer) if isinstance(issuer, str) else None
     if not isinstance(key, bytes) or len(key) < 32:
         raise PermissionError("unknown_issuer")
@@ -31,7 +32,10 @@ def verify_signed_receipt(envelope: Mapping, *, keys: Mapping[str, bytes], op_id
         raise PermissionError("invalid_body") from exc
     if not hmac.compare_digest(expected, mac):
         raise PermissionError("invalid_signature")
-    if not isinstance(payload_digest, str) or not hmac.compare_digest(body["payload_digest"], payload_digest):
+    # Reject malformed signed fields before calling compare_digest (which requires strings).
+    if not isinstance(body["payload_digest"], str) or not isinstance(payload_digest, str):
+        raise PermissionError("invalid_payload_digest")
+    if not hmac.compare_digest(body["payload_digest"], payload_digest):
         raise PermissionError("payload_binding_mismatch")
     try:
         receipt = VerifiedReceipt(**body)
