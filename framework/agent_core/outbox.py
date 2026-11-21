@@ -1,5 +1,7 @@
 """SQLite outbox prototype: unknown outcomes require reconciliation."""
-import json, sqlite3, time
+import json, sqlite3, time, hashlib
+from agent_core.receipt_gate import create_receipt_table, consume_verified_receipt
+from agent_core.signed_receipt import verify_signed_receipt
 from contextlib import contextmanager
 
 class Outbox:
@@ -16,6 +18,7 @@ class Outbox:
             db.execute("""CREATE TABLE IF NOT EXISTS reconciliation_nonces(
               nonce TEXT PRIMARY KEY,op_id TEXT NOT NULL,outcome TEXT NOT NULL,
               consumed_at REAL NOT NULL)""")
+            create_receipt_table(db)
     @contextmanager
     def _tx(self):
         db=sqlite3.connect(self.path,timeout=10,isolation_level=None)
@@ -98,6 +101,36 @@ class Outbox:
             if changed!=1:
                 raise RuntimeError('reconciliation_state_race')
             return True
+    def reconcile_signed(self, op_id, outcome, envelope, *, keys):
+        """离线合成 HMAC 信任域：验签、receipt 唯一消费和状态迁移同一事务。
+        真实设备副作用仍需独立核对；不得直接把执行器自签回执当作事实。
+        """
+        if outcome not in ('pending', 'succeeded', 'failed'):
+            raise ValueError('invalid_reconciliation')
+        now = self.clock()
+        with self._tx() as db:
+            row = db.execute(
+                "SELECT state,payload FROM operations WHERE op_id=?", (op_id,)
+            ).fetchone()
+            if row is None or row[0] != 'ambiguous':
+                return False
+            digest = 'sha256:' + hashlib.sha256(row[1].encode('utf-8')).hexdigest()
+            receipt = verify_signed_receipt(
+                envelope, keys=keys, op_id=op_id, outcome=outcome,
+                payload_digest=digest, now=now
+            )
+            consume_verified_receipt(db, receipt, op_id, outcome, now)
+            changed = db.execute(
+                "UPDATE operations SET state=?,result=?,updated_at=? "
+                "WHERE op_id=? AND state='ambiguous'",
+                (outcome, json.dumps({'issuer':receipt.issuer,
+                    'receipt_id':receipt.receipt_id, 'authenticated':True}),
+                 now, op_id)
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError('reconciliation_state_race')
+            return True
+
     def get(self,op_id):
         with sqlite3.connect(self.path) as db:
             db.row_factory=sqlite3.Row
