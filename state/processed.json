@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_hint_id": 26,
+  "last_hint_id": 27,
   "known_hint_ids": [
     "HINT-001",
     "HINT-002",
@@ -27,7 +27,8 @@
     "HINT-023",
     "HINT-024",
     "HINT-025",
-    "HINT-026"
+    "HINT-026",
+    "HINT-027"
   ],
   "processed_sources": [
     {
@@ -53,6 +54,12 @@
       "hint_id": "HINT-026",
       "date": "2026-11-19",
       "evidence": "official production engineering self-report; 1700+ investigations, 600+ root causes, 100 manually reviewed diagnoses at 70%; repository implementation proposed, not tested"
+    },
+    {
+      "url": "https://claude.com/ja/resources/articles/skills-over-mcp-tasks-and-more",
+      "hint_id": "HINT-027",
+      "date": "2026-11-24",
+      "evidence": "official public beta announcement; runtime binding proposed, not tested"
     }
   ],
   "notes": "IDs 001–023 are historical references; full original reports have not yet been imported. This file does not assert that archived Hint files exist."
