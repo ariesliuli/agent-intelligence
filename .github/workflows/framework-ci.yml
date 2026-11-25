@@ -32,4 +32,19 @@ jobs:
         working-directory: framework
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m pytest -q tests/
+        run: python -m pytest -q tests/ --junitxml=verification-results.xml
+      - name: Record verification environment
+        if: always()
+        working-directory: framework
+        run: |
+          python -c 'import json, os, platform, sqlite3, sys, subprocess; print(json.dumps(dict(commit=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(), python=sys.version, sqlite=sqlite3.sqlite_version, platform=platform.platform(), run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"]), indent=2))' > verification-environment.json
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ matrix.python-version }}-${{ github.run_attempt }}
+          path: |
+            framework/verification-results.xml
+            framework/verification-environment.json
+          if-no-files-found: error
+          retention-days: 30
